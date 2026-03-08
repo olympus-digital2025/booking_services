@@ -24,7 +24,7 @@ class Database {
 
       $charset_collate = $wpdb->get_charset_collate();
 
-      // Bookings table
+      // Bookings table.
       $bookings_table = "
 		CREATE TABLE IF NOT EXISTS {$wpdb->prefix}service_bookings (
 			id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -51,7 +51,7 @@ class Database {
 		) $charset_collate;
 		";
 
-      // Worker services location table
+      // Worker services location table.
       $worker_locations = "
 		CREATE TABLE IF NOT EXISTS {$wpdb->prefix}worker_service_locations (
 			id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -71,7 +71,7 @@ class Database {
 		) $charset_collate;
 		";
 
-      // Worker ratings/reviews
+      // Worker ratings/reviews.
       $ratings_table = "
 		CREATE TABLE IF NOT EXISTS {$wpdb->prefix}service_ratings (
 			id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,

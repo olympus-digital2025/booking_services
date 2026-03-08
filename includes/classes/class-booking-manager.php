@@ -17,46 +17,47 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Booking_Manager {
 
 	/**
-	 * Create a new booking
+	 * Create a new booking.
 	 *
 	 * @param array $data Booking data.
 	 * @return int|false Booking ID or false on failure.
 	 */
   public static function create_booking( $data ) {
-      global $wpdb;
+    global $wpdb;
 
-      $booking_id = 'BK-' . gmdate( 'YmdHis' ) . '-' . wp_generate_password( 6, false, false );
+    $booking_id = 'BK-' . gmdate( 'YmdHis' ) . '-' . wp_generate_password( 6, false, false );
 
-      $insert_data = array(
-          'booking_id'        => $booking_id,
-          'service_id'        => isset( $data['service_id'] ) ? intval( $data['service_id'] ) : 0,
-          'worker_id'         => isset( $data['worker_id'] ) ? intval( $data['worker_id'] ) : 0,
-          'customer_id'       => isset( $data['customer_id'] ) ? intval( $data['customer_id'] ) : 0,
-          'scheduled_date'    => isset( $data['scheduled_date'] ) ? sanitize_text_field( $data['scheduled_date'] ) : '',
-          'service_location'  => isset( $data['service_location'] ) ? sanitize_text_field( $data['service_location'] ) : '',
-          'service_latitude'  => isset( $data['latitude'] ) ? floatval( $data['latitude'] ) : 0,
-          'service_longitude' => isset( $data['longitude'] ) ? floatval( $data['longitude'] ) : 0,
-          'total_amount'      => isset( $data['total_amount'] ) ? floatval( $data['total_amount'] ) : 0,
-          'notes'             => isset( $data['notes'] ) ? wp_kses_post( $data['notes'] ) : '',
-          'status'            => 'pending',
-      );
+    $insert_data = array(
+        'booking_id'        => $booking_id,
+        'service_id'        => isset( $data['service_id'] ) ? intval( $data['service_id'] ) : 0,
+        'worker_id'         => isset( $data['worker_id'] ) ? intval( $data['worker_id'] ) : 0,
+        'customer_id'       => isset( $data['customer_id'] ) ? intval( $data['customer_id'] ) : 0,
+        'scheduled_date'    => isset( $data['scheduled_date'] ) ? sanitize_text_field( $data['scheduled_date'] ) : '',
+        'service_location'  => isset( $data['service_location'] ) ? sanitize_text_field( $data['service_location'] ) : '',
+        'service_latitude'  => isset( $data['latitude'] ) ? floatval( $data['latitude'] ) : 0,
+        'service_longitude' => isset( $data['longitude'] ) ? floatval( $data['longitude'] ) : 0,
+        'total_amount'      => isset( $data['total_amount'] ) ? floatval( $data['total_amount'] ) : 0,
+        'notes'             => isset( $data['notes'] ) ? wp_kses_post( $data['notes'] ) : '',
+        'status'            => 'pending',
+    );
 
-      $result = $wpdb->insert(
-        "{$wpdb->prefix}service_bookings",
-        $insert_data,
-        array( '%s', '%d', '%d', '%d', '%s', '%s', '%f', '%f', '%f', '%s', '%s' )
-      );
+    $result = $wpdb->insert(
+      "{$wpdb->prefix}service_bookings",
+      $insert_data,
+      array( '%s', '%d', '%d', '%d', '%s', '%s', '%f', '%f', '%f', '%s', '%s' )
+    );
 
-    if ( $result ) {
+    if ( false !== $result ) {
         do_action( 'cp_booking_created', $wpdb->insert_id, $data );
         return $wpdb->insert_id;
     }
 
-      return false;
+    return false;
   }
+  // phpcs:enable Generic.Metrics.CyclomaticComplexity
 
 	/**
-	 * Get booking by ID
+	 * Get booking by ID.
 	 *
 	 * @param int $booking_id Booking ID.
 	 * @return object|null Booking object or null.
@@ -73,7 +74,7 @@ class Booking_Manager {
   }
 
 	/**
-	 * Update booking status
+	 * Update booking status.
 	 *
 	 * @param int    $booking_id Booking ID.
 	 * @param string $status New status.
@@ -96,11 +97,11 @@ class Booking_Manager {
         array( '%d' )
       );
 
-    if ( $result ) {
+    if ( false !== $result ) {
         do_action( 'cp_booking_status_updated', $booking_id, $status );
     }
 
-      return $result !== false;
+      return false !== $result;
   }
 
 	/**
@@ -113,18 +114,27 @@ class Booking_Manager {
   public static function get_worker_bookings( $worker_id, $status = '' ) {
       global $wpdb;
 
-      $query = $wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}service_bookings WHERE worker_id = %d",
-        $worker_id
-      );
+      $worker_id = intval( $worker_id );
 
     if ( ! empty( $status ) ) {
-        $query .= $wpdb->prepare( ' AND status = %s', $status );
+        $status = sanitize_text_field( $status );
+        // phpcs:ignore WordPress.DB.PreparedStatement.NotPrepared
+        return $wpdb->get_results(
+          $wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}service_bookings WHERE worker_id = %d AND status = %s ORDER BY scheduled_date DESC",
+            $worker_id,
+            $status
+          )
+        );
     }
 
-      $query .= ' ORDER BY scheduled_date DESC';
-
-      return $wpdb->get_results( $query );
+      // phpcs:ignore WordPress.DB.PreparedStatement.NotPrepared
+      return $wpdb->get_results(
+        $wpdb->prepare(
+          "SELECT * FROM {$wpdb->prefix}service_bookings WHERE worker_id = %d ORDER BY scheduled_date DESC",
+          $worker_id
+        )
+      );
   }
 
 	/**
@@ -137,22 +147,31 @@ class Booking_Manager {
   public static function get_customer_bookings( $customer_id, $status = '' ) {
       global $wpdb;
 
-      $query = $wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}service_bookings WHERE customer_id = %d",
-        $customer_id
-      );
+      $customer_id = intval( $customer_id );
 
     if ( ! empty( $status ) ) {
-        $query .= $wpdb->prepare( ' AND status = %s', $status );
+        $status = sanitize_text_field( $status );
+        // phpcs:ignore WordPress.DB.PreparedStatement.NotPrepared
+        return $wpdb->get_results(
+          $wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}service_bookings WHERE customer_id = %d AND status = %s ORDER BY scheduled_date DESC",
+            $customer_id,
+            $status
+          )
+        );
     }
 
-      $query .= ' ORDER BY scheduled_date DESC';
-
-      return $wpdb->get_results( $query );
+      // phpcs:ignore WordPress.DB.PreparedStatement.NotPrepared
+      return $wpdb->get_results(
+        $wpdb->prepare(
+          "SELECT * FROM {$wpdb->prefix}service_bookings WHERE customer_id = %d ORDER BY scheduled_date DESC",
+          $customer_id
+        )
+      );
   }
 
 	/**
-	 * Add rating/review
+	 * Add rating/review.
 	 *
 	 * @param array $data Rating data.
 	 * @return int|false Rating ID or false on failure.
@@ -175,7 +194,7 @@ class Booking_Manager {
         array( '%d', '%d', '%d', '%d', '%d', '%s' )
       );
 
-    if ( $result ) {
+    if ( false !== $result ) {
         do_action( 'cp_rating_added', $wpdb->insert_id, $data );
         return $wpdb->insert_id;
     }
@@ -184,7 +203,7 @@ class Booking_Manager {
   }
 
 	/**
-	 * Get worker ratings average
+	 * Get worker ratings average.
 	 *
 	 * @param int $worker_id Worker ID.
 	 * @return float Average rating.
@@ -203,7 +222,7 @@ class Booking_Manager {
   }
 
 	/**
-	 * Get worker total completed bookings
+	 * Get worker total completed bookings.
 	 *
 	 * @param int $worker_id Worker ID.
 	 * @return int Total completed bookings.

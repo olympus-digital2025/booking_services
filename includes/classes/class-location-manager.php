@@ -43,7 +43,7 @@ class Location_Manager {
         array( '%d', '%d', '%s', '%f', '%f', '%f', '%d' )
       );
 
-    if ( $result ) {
+    if ( false !== $result ) {
         do_action( 'cp_service_location_added', $wpdb->insert_id, $worker_id, $service_id );
         return $wpdb->insert_id;
     }
@@ -52,7 +52,7 @@ class Location_Manager {
   }
 
 	/**
-	 * Update service location
+	 * Update service location.
 	 *
 	 * @param int   $location_id Location ID.
 	 * @param array $data Location data to update.
@@ -91,11 +91,11 @@ class Location_Manager {
         array( '%d' )
       );
 
-      return $result !== false;
+      return false !== $result;
   }
 
 	/**
-	 * Get worker service locations
+	 * Get worker service locations.
 	 *
 	 * @param int $worker_id Worker ID.
 	 * @return array Array of locations.
@@ -114,7 +114,7 @@ class Location_Manager {
   }
 
 	/**
-	 * Get available services near a location
+	 * Get available services near a location.
 	 *
 	 * @param string $service_type Service category/type.
 	 * @param float  $latitude Customer's latitude.
@@ -125,49 +125,53 @@ class Location_Manager {
   public static function get_nearby_services( $service_type, $latitude, $longitude, $limit = 20 ) {
       global $wpdb;
 
-      // Using Haversine formula for distance calculation
-      $query = $wpdb->prepare(
-        "SELECT 
-				wsl.*,
-				u.ID as worker_id,
-				u.user_login,
-				u.user_email,
-				p.ID as service_id,
-				p.post_title as service_name,
-				(111.111 * DEGREES(ACOS(
+      $service_type = sanitize_text_field( $service_type );
+      $latitude     = floatval( $latitude );
+      $longitude    = floatval( $longitude );
+      // Using Haversine formula for distance calculation.
+      // phpcs:ignore WordPress.DB.PreparedStatement.NotPrepared
+      return $wpdb->get_results(
+        $wpdb->prepare(
+          "SELECT 
+					wsl.*,
+					u.ID as worker_id,
+					u.user_login,
+					u.user_email,
+					p.ID as service_id,
+					p.post_title as service_name,
+					(111.111 * DEGREES(ACOS(
+						LEAST(
+							1,
+							COS(RADIANS(%f)) * COS(RADIANS(wsl.latitude)) * COS(RADIANS(%f - wsl.longitude)) +
+							SIN(RADIANS(%f)) * SIN(RADIANS(wsl.latitude))
+						)
+					))) as distance_km
+				FROM {$wpdb->prefix}worker_service_locations wsl
+				JOIN {$wpdb->users} u ON wsl.worker_id = u.ID
+				JOIN {$wpdb->posts} p ON wsl.service_id = p.ID
+				WHERE wsl.is_active = 1
+				AND (111.111 * DEGREES(ACOS(
 					LEAST(
 						1,
 						COS(RADIANS(%f)) * COS(RADIANS(wsl.latitude)) * COS(RADIANS(%f - wsl.longitude)) +
 						SIN(RADIANS(%f)) * SIN(RADIANS(wsl.latitude))
 					)
-				))) as distance_km
-			FROM {$wpdb->prefix}worker_service_locations wsl
-			JOIN {$wpdb->users} u ON wsl.worker_id = u.ID
-			JOIN {$wpdb->posts} p ON wsl.service_id = p.ID
-			WHERE wsl.is_active = 1
-			AND (111.111 * DEGREES(ACOS(
-				LEAST(
-					1,
-					COS(RADIANS(%f)) * COS(RADIANS(wsl.latitude)) * COS(RADIANS(%f - wsl.longitude)) +
-					SIN(RADIANS(%f)) * SIN(RADIANS(wsl.latitude))
-				)
-			))) <= wsl.service_radius_km
-			ORDER BY distance_km ASC
-			LIMIT %d",
-        $latitude,
-        $longitude,
-        $latitude,
-        $latitude,
-        $longitude,
-        $latitude,
-        $limit
+				))) <= wsl.service_radius_km
+				ORDER BY distance_km ASC
+				LIMIT %d",
+          $latitude,
+          $longitude,
+          $latitude,
+          $latitude,
+          $longitude,
+          $latitude,
+          $limit
+        )
       );
-
-      return $wpdb->get_results( $query );
   }
 
 	/**
-	 * Calculate distance between two coordinates (in kilometers)
+	 * Calculate distance between two coordinates (in kilometers).
 	 *
 	 * @param float $lat1 Latitude 1.
 	 * @param float $lon1 Longitude 1.
@@ -176,7 +180,7 @@ class Location_Manager {
 	 * @return float Distance in kilometers.
 	 */
   public static function calculate_distance( $lat1, $lon1, $lat2, $lon2 ) {
-      $earth_radius = 6371; // Radius of the earth in km
+      $earth_radius = 6371; // Radius of the earth in km.
 
       $lat_from = deg2rad( $lat1 );
       $lon_from = deg2rad( $lon1 );

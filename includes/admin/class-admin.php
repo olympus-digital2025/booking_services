@@ -28,7 +28,7 @@ class Admin {
 	 * Add admin pages
 	 */
   public static function add_admin_pages() {
-      // Add Service Manager page
+      // Add Service Manager page.
       add_submenu_page(
         'edit.php?post_type=service',
         'Manage Services',
@@ -38,7 +38,7 @@ class Admin {
         array( __CLASS__, 'render_manage_services_page' )
       );
 
-      // Add Bookings Dashboard page
+      // Add Bookings Dashboard page.
       add_submenu_page(
         'edit.php?post_type=service',
         'Bookings Dashboard',
@@ -48,7 +48,7 @@ class Admin {
         array( __CLASS__, 'render_bookings_dashboard' )
       );
 
-      // Add Worker Management page (admin only)
+      // Add Worker Management page (admin only).
     if ( current_user_can( 'manage_options' ) ) {
         add_submenu_page(
           'edit.php?post_type=service',
@@ -101,12 +101,12 @@ class Admin {
 							<tr>
 								<td><strong><?php the_title(); ?></strong></td>
 								<td>
-                                <?php
-                                $categories = get_the_terms( get_the_ID(), 'service_category' );
-                                if ( ! empty( $categories ) ) {
-                                    echo implode( ', ', wp_list_pluck( $categories, 'name' ) );
-                                }
-                                ?>
+                              <?php
+                              $categories = get_the_terms( get_the_ID(), 'service_category' );
+                              if ( ! empty( $categories ) ) {
+                                  echo esc_html( implode( ', ', wp_list_pluck( $categories, 'name' ) ) );
+                              }
+                              ?>
 								</td>
 								<td><?php echo esc_html( get_the_author() ); ?></td>
 								<td><?php echo esc_html( get_the_date( 'Y-m-d H:i' ) ); ?></td>
@@ -141,7 +141,7 @@ class Admin {
 
 			<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0;">
               <?php
-              // Stats for workers
+              // Stats for workers.
               if ( in_array( 'service_worker', $user->roles, true ) ) {
                   $pending   = $wpdb->get_var(
                     $wpdb->prepare(
@@ -180,11 +180,11 @@ class Admin {
                           $rating = \CustomPlugin\Classes\Booking_Manager::get_worker_average_rating( $user_id );
                           echo esc_html( number_format( $rating, 1 ) );
                           ?>
-							⭐
-						</div>
-						<div>Rating</div>
+						⭐
 					</div>
-					<?php
+					<div>Rating</div>
+				</div>
+				<?php
               }
               ?>
 			</div>
@@ -232,7 +232,7 @@ class Admin {
 								<a href="<?php echo esc_url( admin_url( 'admin.php?page=cp-bookings-dashboard&booking=' . $booking->id . '&view=detail' ) ); ?>" class="button button-small">View</a>
 							</td>
 						</tr>
-						<?php
+					<?php
                   }
                   ?>
 				</tbody>
@@ -286,8 +286,8 @@ class Admin {
 							<td>
 								<a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . $worker->ID ) ); ?>" class="button button-small">Edit</a>
 							</td>
-						</tr>
-                      <?php
+					</tr>
+                    <?php
                   }
                   ?>
 				</tbody>
@@ -315,9 +315,9 @@ class Admin {
   }
 
 	/**
-	 * Enqueue admin scripts
+	 * Enqueue admin scripts.
 	 */
   public static function enqueue_admin_scripts() {
-      wp_enqueue_style( 'cp-admin-styles', plugin_dir_url( __FILE__ ) . '../../assets/css/admin.css' );
+      wp_enqueue_style( 'cp-admin-styles', plugin_dir_url( __FILE__ ) . '../../assets/css/admin.css', array(), '1.0' );
   }
 }
