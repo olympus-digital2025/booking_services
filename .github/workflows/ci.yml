@@ -1,0 +1,293 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────
+  # JOB 1 — LINT
+  # Runs PHPCS with WordPress Coding Standards
+  # Rules defined in phpcs.xml:
+  #   WordPress-Core, WordPress-Extra, WordPress-Docs
+  #   CC ≤ 10, Nesting ≤ 3, No TODO/FIXME, No commented code
+  # ─────────────────────────────────────────
+  lint:
+    name: Lint — PHPCS WordPress Standards
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run PHPCS (WordPress Coding Standards)
+        run: composer run lint
+
+  # ─────────────────────────────────────────
+  # JOB 2 — UNIT TESTS + COVERAGE
+  # PHPUnit for WP plugin functions
+  # Coverage report sent to SonarQube
+  # ─────────────────────────────────────────
+  test:
+    name: Unit Tests — PHPUnit
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: xdebug
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run PHPUnit with coverage
+        run: |
+          ./vendor/bin/phpunit \
+            --coverage-clover coverage.xml \
+            --log-junit test-results.xml
+        env:
+          WP_TESTS_DIR: /tmp/wordpress-tests-lib
+          WP_CORE_DIR: /tmp/wordpress
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 1
+
+      - name: Upload test results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
+          retention-days: 1
+
+  # ─────────────────────────────────────────
+  # JOB 3 — SONARQUBE ANALYSIS
+  # Quality Gate thresholds (from standardization plan):
+  #   Bugs = 0 on new code
+  #   Vulnerabilities = 0
+  #   Coverage >= 80%
+  #   Cyclomatic CC <= 10
+  #   No duplication blocks
+  # Requires secrets: SONAR_TOKEN, SONAR_HOST_URL
+  # ─────────────────────────────────────────
+  sonarqube:
+    name: SonarQube — Quality Gate
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Full history needed for accurate blame and new-code detection
+          fetch-depth: 0
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: SonarQube Quality Gate Check
+        uses: SonarSource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # ─────────────────────────────────────────
+  # JOB 4 — DEPLOY TO STAGING
+  # Fires only on develop branch after gate passes
+  # SSH rsync to staging subdomain
+  # Requires secrets: STAGING_SSH_HOST, STAGING_SSH_USER,
+  #   STAGING_SSH_KEY, STAGING_PATH
+  # ─────────────────────────────────────────
+  deploy-staging:
+    name: Deploy — Staging
+    runs-on: ubuntu-latest
+    needs: sonarqube
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production dependencies only
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.STAGING_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync to staging
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            --exclude='.env*' \
+            --exclude='*.xml' \
+            --exclude='*.lock' \
+            ./ ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}:${{ secrets.STAGING_PATH }}
+
+      - name: Post staging URL to PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ **Staging Deploy Complete**\n\n🔗 Staging URL: ${{ secrets.STAGING_URL }}\n\nPlease verify your changes before approving merge to `main`.'
+            })
+
+  # ─────────────────────────────────────────
+  # JOB 5 — DEPLOY TO PRODUCTION
+  # Fires only on main branch after gate passes
+  # Supports SiteGround (SSH) and GoDaddy (SFTP+rsync)
+  # Requires secrets: PROD_SSH_HOST, PROD_SSH_USER,
+  #   PROD_SSH_KEY, PROD_PATH
+  # ─────────────────────────────────────────
+  deploy-production:
+    name: Deploy — Production
+    runs-on: ubuntu-latest
+    needs: sonarqube
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production dependencies only
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.PROD_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync to production
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            --exclude='.env*' \
+            --exclude='*.xml' \
+            --exclude='*.lock' \
+            ./ ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:${{ secrets.PROD_PATH }}
+
+      - name: Extract version from functions.php
+        id: get_version
+        run: |
+          VERSION=$(grep -oP "(?<=Version: )[\d.]+" functions.php)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create git tag for release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.get_version.outputs.version }}" \
+            -m "Release v${{ steps.get_version.outputs.version }}"
+          git push origin "v${{ steps.get_version.outputs.version }}"
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.get_version.outputs.version }}';
+            github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${version}`,
+              name: `v${version}`,
+              body: [
+                '## Features\n',
+                '## Bug Fixes\n',
+                '## Performance\n',
+                '## Breaking Changes\n',
+                `**Full Changelog**: https://github.com/${context.repo.owner}/${context.repo.repo}/compare/...v${version}`
+              ].join('\n'),
+              draft: true,
+              prerelease: false
+            })

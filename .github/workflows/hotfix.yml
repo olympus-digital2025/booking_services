@@ -1,0 +1,137 @@
+name: Hotfix Pipeline
+
+on:
+  push:
+    branches:
+      - 'hotfix/**'
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  # ─────────────────────────────────────────
+  # HOTFIX — Fast lane for critical prod fixes
+  # Skips peer review step (lead review only)
+  # Still runs: lint → tests → sonarqube → deploy
+  # ─────────────────────────────────────────
+  lint:
+    name: Hotfix Lint
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'hotfix/') || startsWith(github.ref, 'refs/heads/hotfix/')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --no-dev
+      - run: composer run lint
+
+  test:
+    name: Hotfix Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: xdebug
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run PHPUnit
+        run: |
+          ./vendor/bin/phpunit \
+            --coverage-clover coverage.xml \
+            --log-junit test-results.xml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hotfix-coverage
+          path: coverage.xml
+          retention-days: 1
+
+  sonarqube:
+    name: Hotfix SonarQube Gate
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: hotfix-coverage
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Quality Gate Check
+        uses: SonarSource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  notify-lead:
+    name: Notify Lead for Hotfix Review
+    runs-on: ubuntu-latest
+    needs: sonarqube
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (!context.issue.number) return;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `## ⚡ Hotfix — Lead Review Required`,
+                ``,
+                `CI passed. This is a **hotfix** branch — lead review gate is required before merge to \`main\`.`,
+                ``,
+                `**Hotfix checklist:**`,
+                `- [ ] Minimal scope — only the critical fix, nothing extra`,
+                `- [ ] Rollback plan documented`,
+                `- [ ] Tested locally against production data`,
+                `- [ ] OWASP critical items verified`,
+                `- [ ] Back-merge to \`develop\` planned after merge to \`main\``,
+              ].join('\n')
+            });

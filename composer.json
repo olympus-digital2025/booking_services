@@ -4,7 +4,8 @@
   },
   "require-dev": {
     "wp-coding-standards/wpcs": "^3.3",
-    "dealerdirect/phpcodesniffer-composer-installer": "^1.2"
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.2",
+    "phpunit/phpunit": "^10.0"
   },
   "config": {
     "allow-plugins": {
@@ -18,6 +19,9 @@
       "@lint:fix",
       "@lint:fix",
       "@lint"
-    ]
+    ],
+    "test": "phpunit --coverage-clover coverage.xml --log-junit test-results.xml",
+    "test:unit": "phpunit --no-coverage",
+    "prepare": "husky install || true"
   }
 }

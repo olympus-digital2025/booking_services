@@ -11,24 +11,16 @@ class ComposerStaticInit88bd1240a06e12371573341aa3549092
     );
 
     public static $prefixLengthsPsr4 = array (
-        'P' =>
+        'P' => 
         array (
             'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\' => 57,
-        ),
-        'C' =>
-        array (
-            'CustomPlugin\\' => 13,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\' =>
+        'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\' => 
         array (
             0 => __DIR__ . '/..' . '/dealerdirect/phpcodesniffer-composer-installer/src',
-        ),
-        'CustomPlugin\\' =>
-        array (
-            0 => __DIR__ . '/../..' . '/src',
         ),
     );
 

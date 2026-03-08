@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "Running pre-commit checks..."
+
+# ─────────────────────────────────────────
+# PHPCS — WordPress Coding Standards
+# Runs: fix twice, then check (lint:run)
+# Matches composer.json scripts definition
+# Rules from phpcs.xml:
+#   WordPress-Core, WordPress-Extra, WordPress-Docs
+#   CC max 10, Nesting max 3, No TODO/FIXME
+# ─────────────────────────────────────────
+echo "Running PHPCS WordPress Standards..."
+composer run lint:run
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "PHPCS failed. Fix lint errors before committing."
+  echo "Run: composer run lint:fix"
+  echo "Then: composer run lint"
+  exit 1
+fi
+
+echo "Pre-commit checks passed."
