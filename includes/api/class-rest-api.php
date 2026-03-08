@@ -27,7 +27,7 @@ class REST_API {
 	 * Register REST routes.
 	 */
   public static function register_routes() {
-      // Get nearby services
+      // Get nearby services.
       register_rest_route(
         'cp/v1',
         '/services/nearby',
@@ -228,7 +228,7 @@ class REST_API {
         return new \WP_Error( 'not_found', 'Booking not found', array( 'status' => 404 ) );
     }
 
-      // Only worker can update their own bookings
+      // Only worker can update their own bookings.
     if ( $booking->worker_id !== $user_id ) {
         return new \WP_Error( 'forbidden', 'You cannot update this booking', array( 'status' => 403 ) );
     }

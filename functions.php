@@ -27,7 +27,9 @@ PucFactory::buildUpdateChecker(
   'custom-plugin'
 );
 
-// Load plugin classes
+/**
+ * Load plugin classes
+ */
 require_once plugin_dir_path( __FILE__ ) . 'includes/database/class-database.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/classes/class-roles.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/classes/class-booking-manager.php';
